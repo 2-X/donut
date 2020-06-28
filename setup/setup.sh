@@ -8,27 +8,26 @@ sudo apt update
 
 # install python3 and alias python to it
 sudo apt install python3
-alias python=python3
 
 # install pip
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
 sudo apt-get install python3-distutils
 sudo python3 get-pip.py
 
-# install python dependencies
-sudo python3 -m pip install apscheduler selenium flask twilio gspread oauth2client python-telegram-bot pypath-magic
+# install setuptools
+sudo apt-get install -y python3-setuptools
 
-# install chromium
-sudo apt-get install chromium-browser
+# install python dependencies
+sudo python3 -m pip install apscheduler flask twilio python-telegram-bot pypath-magic tinydb
 
 # enable credentials storing
 git config --global credential.helper store
-git config --global user.email "brethower.k@gmail.com"
-git config --global user.name "brethower-k"
+git config --global user.email <GITHUB_EMAIL>
+git config --global user.name <GITHUB_USERNAME>
 
 # clone repo
-git clone https://github.com/brethower-k/nu-crushes-autoposter.git
-cd nu-crushes-autoposter
+git clone https://github.com/krisVIBES/donut.git
+cd donut
 
 # download ngrok to bin folder
 mkdir bin
@@ -38,8 +37,9 @@ sudo apt install unzip
 unzip ngrok.zip
 rm ngrok.zip
 cd ..
-# this is the auth token for nucrushesofficial@gmail.com
-./bin/ngrok authtoken 1YkeUEQQSfmbnXwRAp4tWiWDSxz_6oZk2j7J2beg5sk4QeJjY
+
+# set your auth token
+./bin/ngrok authtoken <AUTH_TOKEN>
 
 # set permissions on file as executable
 chmod +x app.py
