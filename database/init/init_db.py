@@ -31,4 +31,4 @@ for cuisine in cuisines:
 # empty file for restaurants
 if os.path.exists(restaurants_db_path):
     os.remove(restaurants_db_path)
-    open(restaurants_db_path, "a").close()
+open(restaurants_db_path, "a").close()
