@@ -1,0 +1,40 @@
+recipes_by_genre = {
+    "italian": {}
+    "french": {}
+    "chinese": {}
+    "japanese": {}
+    "mexican": {}
+    "southern": {}
+    "seafood": {}
+    "bbq": {}
+    "indian": {}
+    "american": {}
+    "cajun/creole": {}
+    "spanish": {}
+    "greek": {}
+    "thai": {}
+    "middle eastern": {}
+    "korean": {}
+}
+
+
+restaurants = {
+    "bbq": [{"name": "Sweet Cheeks Q", "address": ""}]
+}
+
+
+
+
+# HOW IT WORKS
+# users don't cook two days in a row
+# no repeated genres, including the restaurant
+# on Sunday at 8am, text the users:
+
+----------------------------------------------------
+Monday: John is cooking Greek food
+Tuesday: Kris is cooking Chinese food
+Wednesday: Y'all are eating at a Southern restaurant
+Thursday: Ordering food in!
+Friday: Kris is cooking Middle Eastern food
+Saturday: John is cooking BBQ food
+----------------------------------------------------
