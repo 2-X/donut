@@ -42,7 +42,7 @@ app.choices = {}
 def send_weekly_report():
     people = ["kris", "john"]
     app.choices = {
-        "monday": {"cuisine": None, "cocktail": None, "chef": None, "barista": None},
+        "monday": {"cocktail": None, "barista": None},
         "tuesday": {"cuisine": None, "cocktail": None, "chef": None, "barista": None},
         "wednesday": {"cuisine": None, "cocktail": None, "barista": None},
         "thursday": {"cuisine": None, "cocktail": None, "chef": None, "barista": None},
@@ -51,17 +51,11 @@ def send_weekly_report():
         "sunday": {"cocktail": None, "barista": None}
     }
 
-    # remove the day we aren't doing anything on
-    days = ["monday", "tuesday", "thursday", "friday", "saturday"]
-    order_in_day = random.choice(days)
-    try:
-        days.remove(order_in_day)
-    except ValueError:
-        pass
-    app.choices[order_in_day] = {"cocktail": None, "barista": None}
+    # days we are cooking ourselves
+    days = ["tuesday", "thursday", "friday", "saturday"]
 
     # pick random baristas for the days you're not cooking
-    app.choices[order_in_day]["barista"] = random.choice(people)
+    app.choices["monday"]["barista"] = random.choice(people)
     app.choices["sunday"]["barista"] = random.choice(people)
     app.choices["wednesday"]["barista"] = random.choice(people)
 
@@ -120,12 +114,6 @@ def send_weekly_report():
             cooked_choices.remove(cuisine_to_cook)
         except ValueError:
             pass
-        
-        # update the DB
-        app.cuisines_db.update(
-            {"times_cooked": cuisine_to_cook["times_cooked"] + 1},
-            Query().type == cuisine_to_cook['type']
-        )
 
         # remove this choice from the restaurant cuisine pool
         # make sure there's at least one restaurant choice left
@@ -146,10 +134,6 @@ def send_weekly_report():
         restaurant_choices = restaurant_rest
     restaurant_cuisine = random.choice(restaurant_choices)
     app.choices["wednesday"]["cuisine"] = restaurant_cuisine
-    app.cuisines_db.update(
-        {"times_restaurant": restaurant_cuisine["times_restaurant"] + 1},
-        Query().type == restaurant_cuisine['type']
-    )
     
     # -----------------------------------------
     # --------------- COCKTAILS ---------------
@@ -169,10 +153,6 @@ def send_weekly_report():
             cocktail_choices.remove(cocktail_chosen)
         except ValueError:
             pass
-        app.drinks_db.update(
-            {"times_used": cocktail_chosen["times_used"] + 1},
-            Query().name == cocktail_chosen['name']
-        )
 
     # --------------------------------------
     # --------------- REPORT ---------------
@@ -189,9 +169,9 @@ def make_choice_string(day):
 
         if app.choices[day].get("cuisine"):
             if day == "wednesday":
-                string += f"y'all are eating out at a {app.choices[day]['cuisine']['type']} restaurant"
+                string += f"y'all are eating out at a {app.choices[day]['cuisine']['genre']} restaurant"
             else:
-                string += f"{app.choices[day]['chef']} is cooking {app.choices[day]['cuisine']['type']}"
+                string += f"{app.choices[day]['chef']} is cooking {app.choices[day]['cuisine']['genre']}"
         else:
             string += "no meal planned"
 
@@ -235,35 +215,88 @@ app.bg_scheduler.add_job(send_weekly_report, 'cron', day_of_week='sun', hour=8, 
 app.bg_scheduler.add_job(send_reminder, 'cron', day_of_week='mon-sun', hour=7, minute=30)
 
 # each day, remind the user to review the cocktail
-app.bg_scheduler.add_job(send_review_reminder, 'cron', day_of_week='mon-sun', hour=17, minute=25)
+app.bg_scheduler.add_job(send_review_reminder, 'cron', day_of_week='mon-sun', hour=20, minute=0)
 
 # start scheduler
 app.bg_scheduler.start()
 
-def review_cocktail(user, score, review):
-    cocktail_obj = app.choices[get_day()]['cocktail']
-    reviews = cocktail_obj['reviews']
-    reviews.append({
+def review_cocktail(user, index, score, review):
+    existing_cocktail = None
+
+    # search DB for all cocktails with index (should only be one)
+    existing_cocktail_list = app.drinks_db.search(Query().index == index)
+    
+    # quit if there is no cocktail with that index
+    if len(existing_cocktail_list) < 1:
+        # we didn't find the cocktail
+        return f"could not find the cocktail with the index {index}!"
+
+    # get the cocktail we found!
+    existing_cocktail = existing_cocktail_list[0]
+    
+    # get existing reviews
+    existing_reviews = existing_cocktail['reviews']
+
+    # add our review
+    existing_reviews.append({
         "from": user,
         "score": score,
         "review": review,
         "timestamp": gen_timestamp()
     })
+
+    # update the reviews list
     app.drinks_db.update(
-        {"reviews": reviews},
-        Query().name == cocktail_obj['name']
+        {"reviews": existing_reviews, "times_used": existing_cocktail["times_used"] + 1},
+        Query().index == index
     )
 
-    return f"recorded your review of today's cocktail, {cocktail_obj['name']}!"
+    return f"recorded your review of the cocktail: {existing_cocktail['name']}!"
+
+def review_recipe(user, genre, recipe, score, review):
+    existing_cuisine = None
+
+    # search DB for all cuisines with index (should only be one)
+    existing_cuisine_list = app.cuisines_db.search(Query().genre == genre)
+    
+    # quit if there is no cuisine with that index
+    if len(existing_cuisine_list) < 1:
+        # we didn't find the cuisine
+        return f"could not find the cuisine with the genre {genre}!"
+
+    # get the cuisine we found!
+    existing_cuisine = existing_cuisine_list[0]
+    
+    # get existing reviews
+    existing_reviews = existing_cuisine['reviews']
+
+    # add our review
+    existing_reviews.append({
+        "from": user,
+        "score": score,
+        "recipe": recipe,
+        "review": review,
+        "timestamp": gen_timestamp()
+    })
+
+    # update the DB
+    app.cuisines_db.update(
+        {"times_cooked": existing_cuisine["times_cooked"] + 1, "reviews": existing_reviews},
+        Query().genre == genre
+    )
+
+    return f"recorded your review of the recipe!"
 
 def review_restaurant(user, name, score, review):
-    this_weeks_restaurant = None
-    this_weeks_restaurant_list = app.restaurants_db.search(Query().name == name)
-    if len(this_weeks_restaurant_list) > 0:
-        this_weeks_restaurant = this_weeks_restaurant_list[0]
+    existing_restaurant = None
+    existing_restaurant_list = app.restaurants_db.search(Query().name == name)
+    restaurant_cuisine = app.choices["wednesday"]["cuisine"]
     
-    if this_weeks_restaurant:
-        existing_reviews = this_weeks_restaurant['reviews']
+    if len(existing_restaurant_list) > 0:
+        existing_restaurant = existing_restaurant_list[0]
+    
+    if existing_restaurant:
+        existing_reviews = existing_restaurant['reviews']
         existing_reviews.append({
             "from": user,
             "score": score,
@@ -284,8 +317,16 @@ def review_restaurant(user, name, score, review):
             "timestamp": gen_timestamp()
         })
 
+        # update restaurant's reviews
         app.restaurants_db.insert(
             {"reviews": reviews, "name": name}
+        )
+
+        # update times restauranted for this week's genre
+        print(restaurant_cuisine)
+        app.cuisines_db.update(
+            {"times_restaurant": restaurant_cuisine["times_restaurant"] + 1},
+            Query().genre == restaurant_cuisine["genre"]
         )
 
     return f"recorded your review of the restaurant, {name}!"
@@ -299,6 +340,11 @@ def gen_timestamp():
 def handle_response(content, user):
     if content.startswith("COCKTAIL\n"):
         try:
+            index = int(re.search("index:[\s]*(.*)(\n|$)", content).groups()[0])
+        except Exception:
+            return "i need an index"
+
+        try:
             score = re.search("score:[\s]*(.*)(\n|$)", content).groups()[0]
         except AttributeError:
             return "i need a score"
@@ -308,7 +354,8 @@ def handle_response(content, user):
         except AttributeError:
             return "i need a review"
 
-        return review_cocktail(user, score, review)
+        return review_cocktail(user, index, score, review)
+
     elif content.startswith("RESTAURANT\n"):
         try:
             name = re.search("name:[\s]*(.*)(\n|$)", content).groups()[0]
@@ -325,8 +372,32 @@ def handle_response(content, user):
             review = re.search("review:[\s]*(.*)(\n|$)", content).groups()[0]
         except AttributeError:
             return "i need a review"
-    
+        
         return review_restaurant(user, name, score, review)
+
+    elif content.startswith("CUISINE\n"):
+        try:
+            genre = re.search("genre:[\s]*(.*)(\n|$)", content).groups()[0]
+            genre = genre.lower()
+        except AttributeError:
+            return "i need a genre"
+
+        try:
+            recipe = re.search("recipe:[\s]*(.*)(\n|$)", content).groups()[0]
+        except AttributeError:
+            return "i need a recipe"
+
+        try:
+            score = re.search("score:[\s]*(.*)(\n|$)", content).groups()[0]
+        except AttributeError:
+            return "i need a score"
+
+        try:
+            review = re.search("review:[\s]*(.*)(\n|$)", content).groups()[0]
+        except AttributeError:
+            return "i need a review"
+    
+        return review_recipe(user, genre, recipe, score, review)
     else:
         return f"sorry {user}, i don't understand lol drill go brrrr"
 
